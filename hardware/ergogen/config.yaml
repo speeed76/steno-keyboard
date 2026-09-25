@@ -1,0 +1,172 @@
+# Steno/QWERTY dual-mode keyboard: Ergogen v4 layout.
+#
+#   npx ergogen@4 hardware/ergogen -o hardware/ergogen/output
+#
+# 42 MX keys with Kailh hotswap sockets: 3 x 12 columnar-staggered + 3 thumb
+# keys per hand, one Raspberry Pi Pico-footprint module in the middle, and a
+# slide switch for steno/QWERTY mode. Matrix: 4 rows x 12 columns, diodes from
+# column (anode) to row (cathode). The GPIO assignment must match
+# firmware/stenokb/config.py.
+
+meta:
+  engine: 4.2.1
+  name: steno-qwerty
+  version: 0.1
+  author: steno-keyboard
+
+units:
+  # MX key pitch
+  kx: 19.05
+  ky: 19.05
+  # gap between the two halves' inner key edges, room for the 21 mm wide Pico
+  gap: 23
+  # mirror distance = distance between the two inner-column key centres
+  half_distance: kx + gap
+
+points:
+  key:
+    padding: ky
+    spread: kx
+  zones:
+    matrix:
+      columns:
+        outer:
+          key.column_net: GP0
+          key.mirror.column_net: GP16
+        pinky:
+          key.column_net: GP1
+          key.mirror.column_net: GP17
+        ring:
+          key.stagger: 5
+          key.column_net: GP2
+          key.mirror.column_net: GP18
+        middle:
+          key.stagger: 3
+          key.column_net: GP3
+          key.mirror.column_net: GP19
+        index:
+          key.stagger: -3
+          key.column_net: GP4
+          key.mirror.column_net: GP20
+        inner:
+          key.stagger: -2
+          key.column_net: GP5
+          key.mirror.column_net: GP21
+      rows:
+        bottom:
+          row_net: GP8
+        home:
+          row_net: GP7
+        top:
+          row_net: GP6
+    thumb:
+      anchor:
+        ref: matrix_middle_bottom
+        shift: [0, -ky - 6]
+      columns:
+        near:
+          key.column_net: GP3
+          key.mirror.column_net: GP19
+        home:
+          key.column_net: GP4
+          key.mirror.column_net: GP20
+        far:
+          key.splay: -15
+          key.origin: [-kx / 2, -ky / 2]
+          key.column_net: GP5
+          key.mirror.column_net: GP21
+      rows:
+        cluster:
+          row_net: GP9
+  mirror:
+    ref: matrix_inner_bottom
+    distance: half_distance
+
+outlines:
+  _keys:
+    - what: rectangle
+      where: true
+      size: [kx, ky]
+      bound: true
+  _middle:
+    # strip between the halves that carries the Pico and the mode switch
+    - what: rectangle
+      where:
+        ref: matrix_inner_bottom
+        shift: [half_distance / 2, 20.25]
+      size: [gap + 1, 58.5]
+  _bridge:
+    # joins each thumb cluster to the main key block
+    - what: rectangle
+      where: /^(mirror_)?matrix_middle_bottom$/
+      adjust:
+        shift: [19.65, -14.5]
+      size: [58.4, 11]
+    # fills the sliver where the splayed thumb key meets its neighbour
+    - what: rectangle
+      where: /^(mirror_)?matrix_middle_bottom$/
+      adjust:
+        shift: [30.35, -25.5]
+      size: [15, 20]
+  _raw:
+    - what: outline
+      name: _keys
+    - what: outline
+      name: _bridge
+      operation: add
+    - what: outline
+      name: _middle
+      operation: add
+  board:
+    - what: outline
+      name: _raw
+      fillet: 1
+  # switch-cutout preview, for checking the layout (not for manufacturing)
+  preview:
+    - what: outline
+      name: board
+    - what: rectangle
+      where: true
+      size: [14, 14]
+      operation: stack
+
+pcbs:
+  steno_qwerty:
+    template: kicad5
+    outlines:
+      edge:
+        outline: board
+        layer: Edge.Cuts
+    footprints:
+      switch:
+        what: mx
+        where: true
+        params:
+          hotswap: true
+          keycaps: true
+          from: "{{column_net}}"
+          to: "{{colrow}}"
+      diode:
+        what: diode
+        where: true
+        adjust:
+          shift: [0, -4.7]
+        params:
+          from: "{{colrow}}"
+          to: "{{row_net}}"
+      mcu:
+        what: pico
+        where:
+          ref: matrix_inner_bottom
+          shift: [half_distance / 2, 23.5]
+      mode_switch:
+        # MSK-12C02 SPDT slide switch on the bottom edge, lever pointing down.
+        # Common pin -> GP22 (internal pull-up), throw -> GND: closed = steno.
+        what: slider
+        where:
+          ref: matrix_inner_bottom
+          shift: [half_distance / 2, -7.65]
+          rotate: 180
+        params:
+          from: GP22
+          to: GND
